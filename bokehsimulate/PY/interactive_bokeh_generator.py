@@ -99,6 +99,18 @@ class InteractiveBokehGenerator:
         if self.use_portrait_mask:
             print(f"✓ 人体mask保护已启用（膨胀+高斯平滑边缘处理）")
     
+    def _get_mask_path(self):
+        """获取mask文件路径（IMGS/modnetportrait/portrait_mask.png）"""
+        # 从image_path向上查找IMGS目录
+        path_parts = self.image_path.resolve().parts
+        for idx, part in enumerate(path_parts):
+            if part == 'IMGS':
+                imgs_dir = Path(*path_parts[:idx+1])
+                return imgs_dir / 'modnetportrait' / 'portrait_mask.png'
+        
+        # 后备方案：如果找不到IMGS，使用parent.parent
+        return self.image_path.parent.parent / 'modnetportrait' / 'portrait_mask.png'
+    
     def mouse_callback(self, event, x, y, flags, param):
         """Mouse callback for rectangular selection"""
         # Map display coordinates to original image coordinates
@@ -287,11 +299,9 @@ class InteractiveBokehGenerator:
         if not self.use_portrait_mask:
             return None
         
-        # 创建modnetportrait目录
-        portrait_dir = self.image_path.parent / 'modnetportrait'
-        portrait_dir.mkdir(parents=True, exist_ok=True)
-        
-        portrait_mask_path = portrait_dir / 'portrait_mask.png'
+        # 获取正确的mask路径（IMGS/modnetportrait/portrait_mask.png）
+        # 不在这里创建目录，由 generate_portrait_mask() 自动处理
+        portrait_mask_path = self._get_mask_path()
         
         # 如果mask已存在，检查是否有效
         if portrait_mask_path.exists():
@@ -329,7 +339,7 @@ class InteractiveBokehGenerator:
             
             print(f"正在加载MODNet模型...")
             print(f"输入图片: {self.image_path}")
-            print(f"输出目录: {self.image_path.parent / 'modnetportrait'}")
+            print(f"生成mask到: IMGS/modnetportrait/portrait_mask.png")
             
             # generate_portrait_mask会自动保存PNG文件到IMGS/modnetportrait/portrait_mask.png
             portrait_mask = generate_portrait_mask(str(self.image_path), modnet_ckpt)
@@ -337,7 +347,7 @@ class InteractiveBokehGenerator:
             print(f"generate_portrait_mask返回成功，返回值类型: {type(portrait_mask)}")
             
             # PNG已经由generate_portrait_mask直接保存，获取保存路径
-            portrait_mask_path = self.image_path.parent / 'modnetportrait' / 'portrait_mask.png'
+            portrait_mask_path = self._get_mask_path()
             
             # 验证文件是否创建
             import time
@@ -591,36 +601,58 @@ class InteractiveBokehGenerator:
 
 
 def main():
-    """主函数"""
-    import argparse
-    
-    # Get relative paths based on script location
+    # Get script directory as base path
     script_dir = Path(__file__).parent
-    project_root = script_dir.parent
-    default_image = str(project_root / 'IMGS' / 'src.jpg')
-    default_depth = str(project_root / 'DEPTH' / 'depth.png')
+    base_dir = script_dir.parent
     
-    parser = argparse.ArgumentParser(description='交互式虚化生成器')
-    parser.add_argument('--image', default=default_image, 
-                       help='RGB图像路径')
-    parser.add_argument('--depth', default=default_depth,
-                       help='深度图路径')
-    parser.add_argument('--output', default=None,
-                       help='输出目录（默认为image所在目录的bokeh_results）')
-    parser.add_argument('--roi-size', type=int, default=31,
-                       help='ROI大小，默认31x31')
+    # Configuration parameters (relative paths)
+    image_path = base_dir / 'IMGS' / 'src' / '0.jpg'
+    depth_path = base_dir / 'IMGS' / 'DEPTH' / '0.png'
+    output_dir = base_dir / 'IMGS' / 'bokeh_results'
+    lut_dir = base_dir / 'LUT'
+    html_dir = base_dir / 'SUMMARY_HTML'
+    roi_size = 32  # Configurable ROI size
     
-    args = parser.parse_args()
+    # MODNet人体保护功能配置
+    use_portrait_mask = True  # 设置为 True 启用人体mask保护，False 禁用
+    modnet_ckpt = None  # 如果为 None，则自动查找模型文件
     
-    generator = InteractiveBokehGenerator(
-        args.image, 
-        args.depth, 
-        args.output,
-        args.roi_size
-    )
+    print("\n" + "="*70)
+    print("🎬 Interactive Bokeh Generator v1.0")
+    print("="*70)
+    print(f"RGB image: {image_path}")
+    print(f"Depth map:  {depth_path}")
+    print(f"Output dir: {output_dir}")
+    print(f"LUT dir: {lut_dir}")
+    print(f"HTML dir: {html_dir}")
+    print(f"ROI size: {roi_size}x{roi_size}")
+    if use_portrait_mask:
+        print(f"✓ 人体mask保护: 已启用")
+    else:
+        print(f"✗ 人体mask保护: 已禁用")
+    print("="*70 + "\n")
     
-    generator.run()
-
+    # Create generator
+    try:
+        generator = InteractiveBokehGenerator(
+            image_path=str(image_path),
+            depth_path=str(depth_path),
+            output_dir=str(output_dir),
+            lut_dir=str(lut_dir),
+            html_dir=str(html_dir),
+            roi_size=roi_size,
+            use_portrait_mask=use_portrait_mask,
+            modnet_ckpt=modnet_ckpt
+        )
+        
+        # Run generation pipeline
+        generator.run()
+        
+    except Exception as e:
+        print(f"\n[ERROR] {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == '__main__':
     main()
+

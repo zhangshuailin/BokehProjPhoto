@@ -227,32 +227,32 @@ def generate_portrait_mask(image_path, ckpt_path, device='cuda', max_kernel=None
         pass
     
     # 计算输出路径
-    # 向上查找IMGS目录，在IMGS下创建modnetportrait目录
-    image_path_obj = Path(image_path)
-    print(f"  image_path: {image_path}")
+    # 使用resolve()得到绝对路径，然后在路径部分中查找IMGS
+    image_path_obj = Path(image_path).resolve()
+    print(f"  原始image_path: {image_path}")
+    print(f"  绝对路径: {image_path_obj}")
     
-    # 向上查找 IMGS 目录
-    current = image_path_obj.parent
+    # 从路径parts中找IMGS目录
     imgs_dir = None
-    for _ in range(10):  # 最多向上查找10级
-        if current.name == 'IMGS':
-            imgs_dir = current
+    path_parts = image_path_obj.parts
+    print(f"  路径parts: {path_parts}")
+    
+    for idx, part in enumerate(path_parts):
+        if part == 'IMGS':
+            # 找到IMGS，重建到这一层的路径
+            imgs_dir = Path(*path_parts[:idx+1])
+            print(f"  ✓ 找到IMGS目录在第{idx}层: {imgs_dir}")
             break
-        if current.parent == current:  # 到达根目录
-            break
-        current = current.parent
     
     if imgs_dir is not None:
-        print(f"  找到IMGS目录: {imgs_dir}")
         output_dir = imgs_dir / 'modnetportrait'
     else:
-        print(f"  ⚠ 未找到IMGS目录，使用父目录的上一级")
+        print(f"  ⚠ 未找到IMGS目录，回退到parent.parent")
         output_dir = image_path_obj.parent.parent / 'modnetportrait'
     
     output_path = output_dir / 'portrait_mask.png'
-    
-    print(f"  输出目录: {output_dir}")
-    print(f"  输出路径: {output_path}")
+    print(f"  ✓ 最终输出目录: {output_dir}")
+    print(f"  ✓ 最终输出路径: {output_path}")
     
     # 保存alpha数据为PNG
     try:
