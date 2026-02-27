@@ -262,6 +262,9 @@ def generate_portrait_mask(image_path, ckpt_path, device='cuda', max_kernel=None
         print(f"  ✗ 创建目录失败: {e}")
         raise
     
+    # 处理后的mask数据（用于返回）
+    processed_matte = None
+    
     # 按照用户提供的方式保存：直接转uint8后保存
     try:
         print(f"  准备保存PNG{output_path}...")
@@ -269,6 +272,58 @@ def generate_portrait_mask(image_path, ckpt_path, device='cuda', max_kernel=None
         
         uint8_data = (matte * 255).astype(np.uint8)
         print(f"  uint8数据类型: {type(uint8_data)}, 形状: {uint8_data.shape}, 范围: [{uint8_data.min()}, {uint8_data.max()}]")
+        
+        # ===== 关键：多步骤平滑mask锯齿（综合方案） =====
+        # 组合多种滤波器以获得最佳效果：边界保持 + 锯齿去除
+        print(f"  应用多步骤滤波平滑mask边缘...")
+        try:
+            float_data = uint8_data.astype(np.float32)
+            
+            # 方案1: 尝试Guided Filter（如果ximgproc可用）
+            try:
+                from cv2 import ximgproc
+                print(f"    [Step1] 应用Guided Filter (保边界平滑)...")
+                # 较小的参数避免过度平滑
+                radius = 15
+                eps = 5.0
+                filtered = ximgproc.guidedFilter(float_data, float_data, radius, eps)
+                uint8_data = np.clip(filtered, 0, 255).astype(np.uint8)
+                print(f"    ✓ Guided Filter完成")
+            except ImportError:
+                print(f"    ⚠ ximgproc不可用，跳过Guided Filter")
+            
+            # 方案2: Bilateral Filter（关键！对去除锯齿很有效）
+            print(f"    [Step2] 应用Bilateral Filter (保边界去噪)...")
+            # d: 像素邻域直径，越大处理范围越大
+            # sigmaColor: 色彩空间的sigma，越大颜色差异越容易被当作同一区域
+            # sigmaSpace: 坐标空间的sigma，越大远处像素也会被影响
+            uint8_data = cv2.bilateralFilter(uint8_data, d=9, sigmaColor=75, sigmaSpace=75)
+            print(f"    ✓ Bilateral Filter完成")
+            
+            # 方案3: Morphological Smoothing（闭操作 + 开操作）
+            print(f"    [Step3] 应用形态学平滑 (填平断裂)...")
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+            # 闭操作：膨胀后腐蚀，填平小孔洞
+            uint8_data = cv2.morphologyEx(uint8_data, cv2.MORPH_CLOSE, kernel)
+            # 开操作：腐蚀后膨胀，去除小锯齿
+            uint8_data = cv2.morphologyEx(uint8_data, cv2.MORPH_OPEN, kernel)
+            print(f"    ✓ 形态学平滑完成")
+            
+            # 方案4: 最后一遍轻量级高斯模糊（平缓过渡）
+            print(f"    [Step4] 应用轻量高斯模糊 (过渡平缓)...")
+            uint8_data = cv2.GaussianBlur(uint8_data, (5, 5), 0)
+            print(f"    ✓ 高斯模糊完成")
+            
+            uint8_data = np.clip(uint8_data, 0, 255).astype(np.uint8)
+            print(f"  ✓ 多步骤平滑完成，范围: [{uint8_data.min()}, {uint8_data.max()}]")
+            
+            # 保存处理后的uint8数据并转换为[0,1]范围用于返回
+            processed_matte = uint8_data.astype(np.float32) / 255.0
+            
+        except Exception as e:
+            print(f"  ⚠ 平滑处理出错 ({e})，回退到原始数据")
+            print(f"  将直接使用原始MODNet输出")
+            processed_matte = matte
         
         pil_image = Image.fromarray(uint8_data, mode='L')
         pil_image.save(str(output_path))
@@ -304,7 +359,8 @@ def generate_portrait_mask(image_path, ckpt_path, device='cuda', max_kernel=None
         import traceback
         traceback.print_exc()
 
-    return matte
+    # 返回处理后的mask（如果处理失败则返回原始的）
+    return processed_matte if processed_matte is not None else matte
 
 
 
@@ -447,14 +503,19 @@ def _apply_layered_blur(img, kernel_map, max_kernel, portrait_mask=None, num_thr
     
     result = np.clip(result, 0, 255).astype(np.uint8)
     
-    # ===== 应用人体alpha mask：soft blend融合 =====
+    # ===== 应用人体alpha mask：soft blend融合（非线性alpha曲线） =====
     if portrait_mask is not None:
         # 确保mask尺寸匹配
         if portrait_mask.shape[:2] != img.shape[:2]:
             portrait_mask = cv2.resize(portrait_mask, (img.shape[1], img.shape[0]))
         
         # 使用连续alpha值进行soft blend
-        alpha = portrait_mask[:, :, np.newaxis]  # 扩展为3通道，保留作为alpha
+        alpha = portrait_mask[:, :, np.newaxis].astype(np.float32)  # 扩展为3通道
+        
+        # 非线性alpha变换：使轮廓过渡更平缓
+        alpha_power = 3.0
+        alpha = np.power(alpha, alpha_power)
+        
         # soft blend：原图 * alpha + 虚化图 * (1 - alpha)
         result = (img.astype(np.float32) * alpha + result.astype(np.float32) * (1 - alpha)).astype(np.uint8)
     
@@ -503,14 +564,19 @@ def _apply_layered_blur_fast(img, kernel_map, max_kernel, portrait_mask=None):
     
     result = np.clip(result, 0, 255).astype(np.uint8)
     
-    # ===== 应用人体alpha mask：soft blend融合 =====
+    # ===== 应用人体alpha mask：soft blend融合（非线性alpha曲线） =====
     if portrait_mask is not None:
         # 确保mask尺寸匹配
         if portrait_mask.shape[:2] != img.shape[:2]:
             portrait_mask = cv2.resize(portrait_mask, (img.shape[1], img.shape[0]))
         
         # 使用连续alpha值进行soft blend
-        alpha = portrait_mask[:, :, np.newaxis]  # 扩展为3通道，保留作为alpha
+        alpha = portrait_mask[:, :, np.newaxis].astype(np.float32)  # 扩展为3通道
+        
+        # 非线性alpha变换：使轮廓过渡更平缓
+        alpha_power = 2.0
+        alpha = np.power(alpha, alpha_power)
+        
         # soft blend：原图 * alpha + 虚化图 * (1 - alpha)
         result = (img.astype(np.float32) * alpha + result.astype(np.float32) * (1 - alpha)).astype(np.uint8)
     
@@ -550,14 +616,19 @@ def _apply_layered_blur_ultra_fast(img, kernel_map, max_kernel, portrait_mask=No
         
         result[mask] = blur_layers[k][mask]
     
-    # ===== 应用人体alpha mask：soft blend融合 =====
+    # ===== 应用人体alpha mask：soft blend融合（非线性alpha曲线） =====
     if portrait_mask is not None:
         # 确保mask尺寸匹配
         if portrait_mask.shape[:2] != img.shape[:2]:
             portrait_mask = cv2.resize(portrait_mask, (img.shape[1], img.shape[0]))
         
         # 使用连续alpha值进行soft blend
-        alpha = portrait_mask[:, :, np.newaxis]  # 扩展为3通道，保留作为alpha
+        alpha = portrait_mask[:, :, np.newaxis].astype(np.float32)  # 扩展为3通道
+        
+        # 非线性alpha变换：使轮廓过渡更平缓
+        alpha_power = 2.0
+        alpha = np.power(alpha, alpha_power)
+        
         # soft blend：原图 * alpha + 虚化图 * (1 - alpha)
         result = (img.astype(np.float32) * alpha + result.astype(np.float32) * (1 - alpha)).astype(np.uint8)
     
@@ -603,14 +674,20 @@ def _apply_layered_blur_legacy(img, kernel_map, max_kernel, portrait_mask=None):
     
     result = np.clip(result, 0, 255).astype(np.uint8)
     
-    # ===== 应用人体alpha mask：soft blend融合 =====
+    # ===== 应用人体alpha mask：soft blend融合（非线性alpha曲线） =====
     if portrait_mask is not None:
         # 确保mask尺寸匹配
         if portrait_mask.shape[:2] != img.shape[:2]:
             portrait_mask = cv2.resize(portrait_mask, (img.shape[1], img.shape[0]))
         
         # 使用连续alpha值进行soft blend
-        alpha = portrait_mask[:, :, np.newaxis]  # 扩展为3通道，保留作为alpha
+        alpha = portrait_mask[:, :, np.newaxis].astype(np.float32)  # 扩展为3通道
+        
+        # 非线性alpha变换：使轮廓过渡更平缓
+        # alpha^2 会让过渡region的alpha值向0和1集中，减少硬分离感
+        alpha_power = 2.0
+        alpha = np.power(alpha, alpha_power)
+        
         # soft blend：原图 * alpha + 虚化图 * (1 - alpha)
         result = (img.astype(np.float32) * alpha + result.astype(np.float32) * (1 - alpha)).astype(np.uint8)
     
@@ -637,14 +714,19 @@ def _apply_per_pixel_blur(img, kernel_map, portrait_mask=None):
         blurred = cv2.GaussianBlur(img, (kernel_size, kernel_size), 0)
         result[mask] = blurred[mask]
     
-    # ===== 应用人体alpha mask：soft blend融合 =====
+    # ===== 应用人体alpha mask：soft blend融合（非线性alpha曲线） =====
     if portrait_mask is not None:
         # 确保mask尺寸匹配
         if portrait_mask.shape[:2] != img.shape[:2]:
             portrait_mask = cv2.resize(portrait_mask, (img.shape[1], img.shape[0]))
         
         # 使用连续alpha值进行soft blend
-        alpha = portrait_mask[:, :, np.newaxis]  # 扩展为3通道，保留作为alpha
+        alpha = portrait_mask[:, :, np.newaxis].astype(np.float32)  # 扩展为3通道
+        
+        # 非线性alpha变换：使轮廓过渡更平缓
+        alpha_power = 2.0
+        alpha = np.power(alpha, alpha_power)
+        
         # soft blend：原图 * alpha + 虚化图 * (1 - alpha)
         result = (img.astype(np.float32) * alpha + result.astype(np.float32) * (1 - alpha)).astype(np.uint8)
     

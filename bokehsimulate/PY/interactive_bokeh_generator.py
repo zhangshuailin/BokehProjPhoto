@@ -268,10 +268,10 @@ class InteractiveBokehGenerator:
             # Generate LUT
             # 焦平面宽度随F数增大而增大：宽度 = focus_width_base + fno * focus_width_factor
             lut = generate_blur_lut(focus_depth, fno, 
-                                   focal_length=18,
+                                   focal_length=12,
                                    sensor_width=7.0,
                                    image_width=4096,
-                                   max_blur=31,
+                                   max_blur=27,
                                    min_dist=0.5,
                                    max_dist=20.0,
                                    focus_width_base=80,    # 基础焦平面宽度（深度索引范围）
