@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LUT 编辑器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 28px;
+            background: linear-gradient(90deg, #00d4ff, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .toolbar button, .toolbar label {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .toolbar button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .toolbar button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .toolbar label {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+        
+        .toolbar label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(56, 239, 125, 0.4);
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .control-group label {
+            font-size: 12px;
+            color: #aaa;
+        }
+        
+        .control-group input, .control-group select {
+            padding: 8px 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.05);
+            color: white;
+            font-size: 14px;
+        }
+        
+        .control-group input:focus, .control-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .chart-container {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        #chartCanvas {
+            width: 100%;
+            height: 300px;
+            background: #0a0a1a;
+            border-radius: 8px;
+            cursor: crosshair;
+        }
+        
+        .data-table-container {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .data-table {
+            display: grid;
+            grid-template-columns: repeat(16, 1fr);
+            gap: 4px;
+        }
+        
+        .data-cell {
+            position: relative;
+        }
+        
+        .data-cell input {
+            width: 100%;
+            padding: 6px 4px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            background: rgba(255,255,255,0.05);
+            color: white;
+            font-size: 11px;
+            font-family: monospace;
+        }
+        
+        .data-cell input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.2);
+        }
+        
+        .data-cell .index {
+            position: absolute;
+            top: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            color: #666;
+        }
+        
+        .row-header {
+            grid-column: 1 / -1;
+            padding: 8px;
+            background: rgba(102, 126, 234, 0.2);
+            border-radius: 4px;
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 10px;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 10px;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .preview-xml {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 200px;
+            overflow-y: auto;
+            color: #7c3aed;
+        }
+        
+        .brush-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background: rgba(102, 126, 234, 0.2);
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        
+        .brush-info span {
+            color: #aaa;
+        }
+        
+        .brush-info strong {
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 LUT 曲线编辑器</h1>
+        
+        <div class="toolbar">
+            <label for="fileInput">📂 加载 XML</label>
+            <input type="file" id="fileInput" accept=".xml">
+            <button onclick="saveLUT()">💾 保存 XML</button>
+            <button onclick="resetLUT()">🔄 重置</button>
+            <button onclick="smoothLUT()">〰️ 平滑</button>
+            <button onclick="invertLUT()">🔃 反转</button>
+            <button onclick="linearLUT()">📐 线性</button>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>笔刷大小</label>
+                <input type="range" id="brushSize" min="1" max="30" value="5">
+            </div>
+            <div class="control-group">
+                <label>笔刷强度</label>
+                <input type="range" id="brushStrength" min="1" max="32" value="10">
+            </div>
+            <div class="control-group">
+                <label>最小值</label>
+                <input type="number" id="minValue" min="0" max="255" value="0">
+            </div>
+            <div class="control-group">
+                <label>最大值</label>
+                <input type="number" id="maxValue" min="0" max="255" value="32">
+            </div>
+            <div class="control-group">
+                <label>编辑模式</label>
+                <select id="editMode">
+                    <option value="draw">绘制</option>
+                    <option value="smooth">局部平滑</option>
+                    <option value="set">设置固定值</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="brush-info">
+            <span>当前位置:</span> <strong id="cursorPos">-</strong>
+            <span>|</span>
+            <span>深度值:</span> <strong id="cursorDepth">-</strong>
+            <span>|</span>
+            <span>模糊核:</span> <strong id="cursorBlur">-</strong>
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="chartCanvas"></canvas>
+        </div>
+        
+        <div class="data-table-container">
+            <h3 style="margin-bottom: 15px; color: #aaa; font-size: 14px;">📊 数据表格 (点击编辑)</h3>
+            <div class="data-table" id="dataTable"></div>
+        </div>
+        
+        <div class="preview-xml" id="xmlPreview"></div>
+        
+        <div class="status" id="status">就绪 - 加载XML文件或直接编辑曲线</div>
+    </div>
+
+    <script>
+        // 初始化 LUT 数据 (256个值，默认0-32线性)
+        let lutData = new Array(256).fill(0).map((_, i) => Math.round(32 - (i / 255) * 32));
+        
+        const canvas = document.getElementById('chartCanvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = -1;
+        
+        // 初始化
+        function init() {
+            resizeCanvas();
+            renderChart();
+            renderTable();
+            updateXMLPreview();
+            
+            // 事件监听
+            canvas.addEventListener('mousedown', startDraw);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDraw);
+            canvas.addEventListener('mouseleave', stopDraw);
+            
+            canvas.addEventListener('touchstart', handleTouch);
+            canvas.addEventListener('touchmove', handleTouch);
+            canvas.addEventListener('touchend', stopDraw);
+            
+            document.getElementById('fileInput').addEventListener('change', loadFile);
+            
+            window.addEventListener('resize', () => {
+                resizeCanvas();
+                renderChart();
+            });
+        }
+        
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width - 40;
+            canvas.height = 300;
+        }
+        
+        function renderChart() {
+            const w = canvas.width;
+            const h = canvas.height;
+            const padding = 40;
+            const chartW = w - padding * 2;
+            const chartH = h - padding * 2;
+            
+            // 清空
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, w, h);
+            
+            // 网格
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 1;
+            
+            for (let i = 0; i <= 8; i++) {
+                const x = padding + (chartW / 8) * i;
+                const y = padding + (chartH / 8) * i;
+                
+                ctx.beginPath();
+                ctx.moveTo(x, padding);
+                ctx.lineTo(x, h - padding);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(w - padding, y);
+                ctx.stroke();
+            }
+            
+            // 坐标轴标签
+            ctx.fillStyle = '#666';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            
+            for (let i = 0; i <= 4; i++) {
+                const val = i * 64;
+                const x = padding + (chartW / 256) * val;
+                ctx.fillText(val.toString(), x, h - padding + 15);
+            }
+            ctx.fillText('深度值 (0-255)', w / 2, h - 5);
+            
+            ctx.save();
+            ctx.translate(12, h / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('模糊核大小', 0, 0);
+            ctx.restore();
+            
+            // 绘制曲线
+            ctx.beginPath();
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 2;
+            
+            const maxVal = Math.max(...lutData, 32);
+            
+            for (let i = 0; i < 256; i++) {
+                const x = padding + (chartW / 255) * i;
+                const y = h - padding - (chartH / maxVal) * lutData[i];
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+            
+            // 填充区域
+            ctx.lineTo(padding + chartW, h - padding);
+            ctx.lineTo(padding, h - padding);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(102, 126, 234, 0.2)';
+            ctx.fill();
+            
+            // 绘制点
+            ctx.fillStyle = '#7c3aed';
+            for (let i = 0; i < 256; i += 8) {
+                const x = padding + (chartW / 255) * i;
+                const y = h - padding - (chartH / maxVal) * lutData[i];
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        
+        function renderTable() {
+            const container = document.getElementById('dataTable');
+            container.innerHTML = '';
+            
+            for (let row = 0; row < 16; row++) {
+                const header = document.createElement('div');
+                header.className = 'row-header';
+                header.textContent = `索引 ${row * 16} - ${row * 16 + 15}`;
+                container.appendChild(header);
+                
+                for (let col = 0; col < 16; col++) {
+                    const idx = row * 16 + col;
+                    const cell = document.createElement('div');
+                    cell.className = 'data-cell';
+                    
+                    const input = document.createElement('input');
+                    input.type = 'number';
+                    input.min = 0;
+                    input.max = 255;
+                    input.value = lutData[idx];
+                    input.dataset.index = idx;
+                    input.addEventListener('change', (e) => {
+                        lutData[idx] = parseInt(e.target.value) || 0;
+                        renderChart();
+                        updateXMLPreview();
+                    });
+                    
+                    cell.appendChild(input);
+                    container.appendChild(cell);
+                }
+            }
+        }
+        
+        function getCanvasPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX || e.touches[0].clientX) - rect.left;
+            const y = (e.clientY || e.touches[0].clientY) - rect.top;
+            
+            const padding = 40;
+            const chartW = canvas.width - padding * 2;
+            const chartH = canvas.height - padding * 2;
+            const maxVal = Math.max(...lutData, 32);
+            
+            const idx = Math.round(((x - padding) / chartW) * 255);
+            const val = Math.round((1 - (y - padding) / chartH) * maxVal);
+            
+            return { idx: Math.max(0, Math.min(255, idx)), val: Math.max(0, Math.min(255, val)) };
+        }
+        
+        function startDraw(e) {
+            isDrawing = true;
+            lastX = -1;
+            draw(e);
+        }
+        
+        function draw(e) {
+            const pos = getCanvasPos(e);
+            
+            // 更新信息显示
+            document.getElementById('cursorPos').textContent = pos.idx;
+            document.getElementById('cursorDepth').textContent = pos.idx;
+            document.getElementById('cursorBlur').textContent = lutData[Math.max(0, Math.min(255, pos.idx))];
+            
+            if (!isDrawing) return;
+            
+            const brushSize = parseInt(document.getElementById('brushSize').value);
+            const strength = parseInt(document.getElementById('brushStrength').value);
+            const mode = document.getElementById('editMode').value;
+            const minVal = parseInt(document.getElementById('minValue').value);
+            const maxVal = parseInt(document.getElementById('maxValue').value);
+            
+            // 插值绘制（避免跳跃）
+            if (lastX >= 0) {
+                const startX = Math.min(lastX, pos.idx);
+                const endX = Math.max(lastX, pos.idx);
+                for (let x = startX; x <= endX; x++) {
+                    applyBrush(x, pos.val, brushSize, strength, mode, minVal, maxVal);
+                }
+            } else {
+                applyBrush(pos.idx, pos.val, brushSize, strength, mode, minVal, maxVal);
+            }
+            
+            lastX = pos.idx;
+            renderChart();
+            updateTableCell(pos.idx, brushSize);
+            updateXMLPreview();
+        }
+        
+        function applyBrush(centerIdx, targetVal, brushSize, strength, mode, minVal, maxVal) {
+            for (let i = -brushSize; i <= brushSize; i++) {
+                const idx = centerIdx + i;
+                if (idx < 0 || idx > 255) continue;
+                
+                const distance = Math.abs(i);
+                const weight = 1 - (distance / (brushSize + 1));
+                
+                if (mode === 'draw') {
+                    const newVal = lutData[idx] + (targetVal - lutData[idx]) * weight * 0.5;
+                    lutData[idx] = Math.max(minVal, Math.min(maxVal, Math.round(newVal)));
+                } else if (mode === 'smooth') {
+                    const neighbors = [];
+                    for (let j = -2; j <= 2; j++) {
+                        if (idx + j >= 0 && idx + j <= 255) {
+                            neighbors.push(lutData[idx + j]);
+                        }
+                    }
+                    const avg = neighbors.reduce((a, b) => a + b, 0) / neighbors.length;
+                    lutData[idx] = Math.round(lutData[idx] * 0.7 + avg * 0.3);
+                } else if (mode === 'set') {
+                    lutData[idx] = Math.max(minVal, Math.min(maxVal, strength));
+                }
+            }
+        }
+        
+        function updateTableCell(centerIdx, brushSize) {
+            for (let i = -brushSize; i <= brushSize; i++) {
+                const idx = centerIdx + i;
+                if (idx < 0 || idx > 255) continue;
+                const input = document.querySelector(`input[data-index="${idx}"]`);
+                if (input) input.value = lutData[idx];
+            }
+        }
+        
+        function stopDraw() {
+            isDrawing = false;
+            lastX = -1;
+        }
+        
+        function handleTouch(e) {
+            e.preventDefault();
+            if (e.type === 'touchstart') {
+                startDraw(e);
+            } else {
+                draw(e);
+            }
+        }
+        
+        function updateXMLPreview() {
+            const xml = generateXML();
+            document.getElementById('xmlPreview').textContent = xml;
+        }
+        
+        function generateXML() {
+            const values = lutData.join(',') + ',';
+            return `<param name = "map_lut" type = "int" format = "1d_array" size = "256">
+    <value>
+${values}
+    </value>
+</param>`;
+        }
+        
+        function saveLUT() {
+            const xml = generateXML();
+            const blob = new Blob([xml], { type: 'application/xml' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'LUT.xml';
+            a.click();
+            
+            URL.revokeObjectURL(url);
+            document.getElementById('status').textContent = '已保存 LUT.xml';
+        }
+        
+        function loadFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const content = event.target.result;
+                    // 提取 <value> 标签内的数据
+                    const match = content.match(/<value>\s*([\d,\s]+)\s*<\/value>/);
+                    if (match) {
+                        const values = match[1].split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v));
+                        if (values.length >= 256) {
+                            lutData = values.slice(0, 256);
+                            renderChart();
+                            renderTable();
+                            updateXMLPreview();
+                            document.getElementById('status').textContent = `已加载: ${file.name}`;
+                        } else {
+                            alert('数据不足256个值');
+                        }
+                    } else {
+                        alert('无法解析XML文件');
+                    }
+                } catch (err) {
+                    alert('文件解析错误: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+        
+        function resetLUT() {
+            lutData = new Array(256).fill(0).map((_, i) => Math.round(32 - (i / 255) * 32));
+            renderChart();
+            renderTable();
+            updateXMLPreview();
+            document.getElementById('status').textContent = '已重置为默认值';
+        }
+        
+        function smoothLUT() {
+            const newData = [...lutData];
+            for (let i = 2; i < 254; i++) {
+                newData[i] = Math.round(
+                    lutData[i-2] * 0.1 + 
+                    lutData[i-1] * 0.2 + 
+                    lutData[i] * 0.4 + 
+                    lutData[i+1] * 0.2 + 
+                    lutData[i+2] * 0.1
+                );
+            }
+            lutData = newData;
+            renderChart();
+            renderTable();
+            updateXMLPreview();
+            document.getElementById('status').textContent = '已平滑处理';
+        }
+        
+        function invertLUT() {
+            lutData = lutData.map(v => Math.max(...lutData) - v);
+            renderChart();
+            renderTable();
+            updateXMLPreview();
+            document.getElementById('status').textContent = '已反转';
+        }
+        
+        function linearLUT() {
+            const min = parseInt(document.getElementById('minValue').value);
+            const max = parseInt(document.getElementById('maxValue').value);
+            lutData = new Array(256).fill(0).map((_, i) => Math.round(max - (i / 255) * (max - min)));
+            renderChart();
+            renderTable();
+            updateXMLPreview();
+            document.getElementById('status').textContent = `已设为线性 (${max} -> ${min})`;
+        }
+        
+        // 启动
+        init();
+    </script>
+</body>
+</html>
