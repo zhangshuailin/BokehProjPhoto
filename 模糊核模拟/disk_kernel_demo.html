@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>背景虚化模糊核对比</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        
+        .controls {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+        
+        label {
+            font-weight: 600;
+            color: #333;
+            min-width: 120px;
+        }
+        
+        input[type="range"] {
+            flex: 1;
+            height: 8px;
+            border-radius: 5px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #1e3c72;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: #2a5298;
+            transform: scale(1.2);
+        }
+        
+        .value-display {
+            min-width: 80px;
+            text-align: center;
+            font-weight: bold;
+            color: #1e3c72;
+            font-size: 1.2em;
+        }
+        
+        .kernel-comparison {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .kernel-card {
+            background: #fff;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s;
+        }
+        
+        .kernel-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .kernel-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        
+        .kernel-description {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 15px;
+            text-align: center;
+            line-height: 1.5;
+        }
+        
+        .kernel-grid {
+            display: inline-grid;
+            gap: 2px;
+            padding: 10px;
+            border-radius: 10px;
+            background: #f8f9fa;
+        }
+        
+        .kernel-cell {
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65em;
+            font-weight: 600;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+        
+        .kernel-cell:hover {
+            transform: scale(1.2);
+            z-index: 10;
+        }
+        
+        .grid-container {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        
+        .aperture-shapes {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .aperture-btn {
+            padding: 10px 20px;
+            border: 2px solid #1e3c72;
+            background: white;
+            color: #1e3c72;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .aperture-btn:hover {
+            background: #1e3c72;
+            color: white;
+        }
+        
+        .aperture-btn.active {
+            background: #1e3c72;
+            color: white;
+        }
+        
+        .info-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 30px;
+        }
+        
+        .info-box h3 {
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .info-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .info-box li {
+            margin-bottom: 10px;
+            padding-left: 25px;
+            position: relative;
+            line-height: 1.6;
+        }
+        
+        .info-box li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            .kernel-cell {
+                width: 28px;
+                height: 28px;
+                font-size: 0.55em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📷 背景虚化模糊核对比</h1>
+        <p class="subtitle">Bokeh Blur Kernel Comparison</p>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="radiusSlider">模糊半径:</label>
+                <input type="range" id="radiusSlider" min="2" max="8" value="4" step="1">
+                <span class="value-display" id="radiusValue">4</span>
+            </div>
+            <div class="control-group">
+                <label>光圈形状:</label>
+                <div class="aperture-shapes">
+                    <button class="aperture-btn active" data-blades="0">圆形</button>
+                    <button class="aperture-btn" data-blades="5">五边形</button>
+                    <button class="aperture-btn" data-blades="6">六边形</button>
+                    <button class="aperture-btn" data-blades="7">七边形</button>
+                    <button class="aperture-btn" data-blades="8">八边形</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="kernel-comparison">
+            <div class="kernel-card">
+                <div class="kernel-title">🔵 简单圆盘模糊</div>
+                <div class="kernel-description">均匀分布，所有像素权重相同<br>（你的代码实现）</div>
+                <div class="grid-container">
+                    <div class="kernel-grid" id="diskGrid"></div>
+                </div>
+            </div>
+            
+            <div class="kernel-card">
+                <div class="kernel-title">📷 真实光圈散焦</div>
+                <div class="kernel-description">模拟真实相机光圈形状<br>（多边形光圈叶片）</div>
+                <div class="grid-container">
+                    <div class="kernel-grid" id="bokehGrid"></div>
+                </div>
+            </div>
+            
+            <div class="kernel-card">
+                <div class="kernel-title">🌟 高斯模糊</div>
+                <div class="kernel-description">中心权重大，边缘权重小<br>（常用的图像处理）</div>
+                <div class="grid-container">
+                    <div class="kernel-grid" id="gaussianGrid"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="info-box">
+            <h3>💡 真实背景虚化的特点</h3>
+            <ul>
+                <li><strong>光圈形状</strong>：由镜头光圈叶片数量决定（5-9片），形成多边形而非完美圆形</li>
+                <li><strong>边缘增强</strong>：真实散焦会在光圈边缘产生更亮的环（非均匀分布）</li>
+                <li><strong>色散效应</strong>：不同颜色光线折射率不同，产生彩色边缘</li>
+                <li><strong>距离相关</strong>：散焦程度随物体距离变化（CoC圆大小不同）</li>
+                <li><strong>非对称性</strong>：球面像差会导致前景和背景虚化形状不同</li>
+            </ul>
+        </div>
+        
+        <div class="info-box" style="margin-top: 20px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            <h3>🎯 简单圆盘 vs 真实散焦</h3>
+            <ul>
+                <li><strong>简单圆盘</strong>：快速计算，适合实时应用，但效果不真实</li>
+                <li><strong>真实散焦</strong>：需要复杂计算，效果自然，专业摄影软件使用</li>
+                <li><strong>高斯模糊</strong>：介于两者之间，效果柔和但缺少"焦外"特征</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        let currentBlades = 0;
+        
+        // 创建简单圆盘模糊核
+        function createDiskKernel(radius) {
+            let size = 2 * radius + 1;
+            const kernel = Array(size).fill(0).map(() => Array(size).fill(0));
+            const center = radius;
+            let count = 0;
+            
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const dist = Math.sqrt((x - center) ** 2 + (y - center) ** 2);
+                    if (dist <= radius) {
+                        kernel[y][x] = 1.0;
+                        count++;
+                    }
+                }
+            }
+            
+            // 归一化
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    kernel[y][x] /= count;
+                }
+            }
+            
+            return { kernel, size };
+        }
+        
+        // 创建多边形光圈散焦核
+        function createBokehKernel(radius, blades) {
+            let size = 2 * radius + 1;
+            const kernel = Array(size).fill(0).map(() => Array(size).fill(0));
+            const center = radius;
+            let count = 0;
+            
+            // 生成多边形顶点
+            const vertices = [];
+            if (blades > 0) {
+                for (let i = 0; i < blades; i++) {
+                    const angle = (2 * Math.PI * i / blades) - Math.PI / 2;
+                    vertices.push({
+                        x: center + radius * Math.cos(angle),
+                        y: center + radius * Math.sin(angle)
+                    });
+                }
+            }
+            
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const dx = x - center;
+                    const dy = y - center;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (blades === 0) {
+                        // 圆形光圈
+                        if (dist <= radius) {
+                            kernel[y][x] = 1.0;
+                            count++;
+                        }
+                    } else {
+                        // 多边形光圈 - 使用点在多边形内部判断
+                        if (isPointInPolygon(x, y, vertices)) {
+                            kernel[y][x] = 1.0;
+                            count++;
+                        }
+                    }
+                }
+            }
+            
+            // 归一化
+            if (count > 0) {
+                for (let y = 0; y < size; y++) {
+                    for (let x = 0; x < size; x++) {
+                        kernel[y][x] /= count;
+                    }
+                }
+            }
+            
+            return { kernel, size };
+        }
+        
+        // 判断点是否在多边形内部（射线法）
+        function isPointInPolygon(x, y, vertices) {
+            let inside = false;
+            for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+                const xi = vertices[i].x, yi = vertices[i].y;
+                const xj = vertices[j].x, yj = vertices[j].y;
+                
+                const intersect = ((yi > y) !== (yj > y)) &&
+                    (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+        
+        // 创建高斯模糊核
+        function createGaussianKernel(radius) {
+            let size = 2 * radius + 1;
+            const kernel = Array(size).fill(0).map(() => Array(size).fill(0));
+            const center = radius;
+            const sigma = radius / 2;
+            let sum = 0;
+            
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const dx = x - center;
+                    const dy = y - center;
+                    const dist2 = dx * dx + dy * dy;
+                    const value = Math.exp(-dist2 / (2 * sigma * sigma));
+                    kernel[y][x] = value;
+                    sum += value;
+                }
+            }
+            
+            // 归一化
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    kernel[y][x] /= sum;
+                }
+            }
+            
+            return { kernel, size };
+        }
+        
+        // 渲染核到网格
+        function renderKernel(kernel, size, gridId, colorScheme) {
+            const grid = document.getElementById(gridId);
+            grid.style.gridTemplateColumns = `repeat(${size}, 35px)`;
+            grid.innerHTML = '';
+            
+            let maxVal = 0;
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    maxVal = Math.max(maxVal, kernel[y][x]);
+                }
+            }
+            
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'kernel-cell';
+                    const value = kernel[y][x];
+                    
+                    if (value > 0) {
+                        const ratio = value / maxVal;
+                        let color;
+                        
+                        if (colorScheme === 'blue') {
+                            const lightness = 90 - ratio * 60;
+                            color = `hsl(220, 80%, ${lightness}%)`;
+                        } else if (colorScheme === 'orange') {
+                            const lightness = 90 - ratio * 60;
+                            color = `hsl(30, 90%, ${lightness}%)`;
+                        } else {
+                            const lightness = 90 - ratio * 60;
+                            color = `hsl(280, 70%, ${lightness}%)`;
+                        }
+                        
+                        cell.style.background = color;
+                        cell.style.color = ratio > 0.4 ? 'white' : '#333';
+                        cell.textContent = value.toFixed(3);
+                    } else {
+                        cell.style.background = '#f8f9fa';
+                        cell.style.color = '#ccc';
+                        cell.textContent = '0';
+                    }
+                    
+                    grid.appendChild(cell);
+                }
+            }
+        }
+        
+        function updateVisualization() {
+            const radius = parseInt(document.getElementById('radiusSlider').value);
+            document.getElementById('radiusValue').textContent = radius;
+            
+            // 渲染三种核
+            const disk = createDiskKernel(radius);
+            renderKernel(disk.kernel, disk.size, 'diskGrid', 'blue');
+            
+            const bokeh = createBokehKernel(radius, currentBlades);
+            renderKernel(bokeh.kernel, bokeh.size, 'bokehGrid', 'orange');
+            
+            const gaussian = createGaussianKernel(radius);
+            renderKernel(gaussian.kernel, gaussian.size, 'gaussianGrid', 'purple');
+        }
+        
+        // 事件监听
+        document.getElementById('radiusSlider').addEventListener('input', updateVisualization);
+        
+        document.querySelectorAll('.aperture-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.aperture-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentBlades = parseInt(this.dataset.blades);
+                updateVisualization();
+            });
+        });
+        
+        // 初始化
+        updateVisualization();
+    </script>
+</body>
+</html>

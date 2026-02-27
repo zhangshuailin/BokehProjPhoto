@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>弥散圆公式演示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+        
+        .formula-box {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            color: white;
+            text-align: center;
+            font-size: 1.3em;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .controls {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+        }
+        
+        .control-group {
+            margin-bottom: 25px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+        
+        .control-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 5px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        .control-group input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            cursor: pointer;
+            border: none;
+        }
+        
+        .value-display {
+            display: inline-block;
+            background: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            color: #667eea;
+            margin-left: 10px;
+            min-width: 80px;
+            text-align: center;
+        }
+        
+        .visualization {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            border: 2px solid #e0e0e0;
+        }
+        
+        canvas {
+            width: 100%;
+            border-radius: 10px;
+            background: #fafafa;
+        }
+        
+        .result-box {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .result-box h3 {
+            color: white;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .result-value {
+            font-size: 2.5em;
+            color: white;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .explanation {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .explanation h4 {
+            color: #1976d2;
+            margin-bottom: 10px;
+        }
+        
+        .explanation p {
+            color: #555;
+            line-height: 1.6;
+        }
+        
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📷 弥散圆公式演示</h1>
+        <p class="subtitle">Circle of Confusion - 景深计算的核心概念</p>
+        
+        <div class="formula-box">
+            CoC = (|D - S| / D) × (f² / (N × (S - f)))
+        </div>
+        
+        <div class="content">
+            <div class="controls">
+                <h3 style="margin-bottom: 20px; color: #333;">📐 参数控制</h3>
+                
+                <div class="control-group">
+                    <label>
+                        对焦距离 S (米)
+                        <span class="value-display" id="focusValue">3.0 m</span>
+                    </label>
+                    <input type="range" id="focusDistance" min="1" max="20" step="0.1" value="3">
+                </div>
+                
+                <div class="control-group">
+                    <label>
+                        物体距离 D (米)
+                        <span class="value-display" id="objectValue">5.0 m</span>
+                    </label>
+                    <input type="range" id="objectDistance" min="1" max="20" step="0.1" value="5">
+                </div>
+                
+                <div class="control-group">
+                    <label>
+                        焦距 f (mm)
+                        <span class="value-display" id="focalValue">2 mm</span>
+                    </label>
+                    <input type="range" id="focalLength" min="1.0" max="20.0" step="0.01" value="2.0">
+                </div>
+                
+                <div class="control-group">
+                    <label>
+                        光圈 f/N
+                        <span class="value-display" id="apertureValue">f/2.8</span>
+                    </label>
+                    <input type="range" id="aperture" min="1.4" max="22" step="0.1" value="2.8">
+                </div>
+            </div>
+            
+            <div class="visualization">
+                <h3 style="margin-bottom: 15px; color: #333;">🎯 光学示意图</h3>
+                <canvas id="opticsCanvas" width="500" height="400"></canvas>
+            </div>
+        </div>
+        
+        <div class="result-box">
+            <h3>弥散圆直径 (CoC)</h3>
+            <div class="result-value" id="cocResult">0.000 mm</div>
+        </div>
+        
+        <div class="explanation">
+            <h4>💡 公式说明</h4>
+            <p>
+                <strong>弥散圆（Circle of Confusion）</strong>是衡量图像清晰度的重要指标。当物体不在对焦平面上时，
+                它在成像平面上会形成一个模糊的圆斑而不是清晰的点。CoC值越小，图像越清晰。
+            </p>
+            <p style="margin-top: 10px;">
+                <strong>参数含义：</strong><br>
+                • S：对焦距离（相机对焦的位置）<br>
+                • D：物体实际距离<br>
+                • f：镜头焦距<br>
+                • N：光圈值（f-number）<br>
+                当CoC小于传感器的可接受弥散圆时，物体被认为是"清晰"的，这就是景深的基础。
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('opticsCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const focusSlider = document.getElementById('focusDistance');
+        const objectSlider = document.getElementById('objectDistance');
+        const focalSlider = document.getElementById('focalLength');
+        const apertureSlider = document.getElementById('aperture');
+        
+        function calculate() {
+            const S = parseFloat(focusSlider.value);
+            const D = parseFloat(objectSlider.value);
+            const f = parseFloat(focalSlider.value) / 1000; // 转换为米
+            const N = parseFloat(apertureSlider.value);
+            
+            // 更新显示值
+            document.getElementById('focusValue').textContent = S.toFixed(1) + ' m';
+            document.getElementById('objectValue').textContent = D.toFixed(1) + ' m';
+            document.getElementById('focalValue').textContent = focalSlider.value + ' mm';
+            document.getElementById('apertureValue').textContent = 'f/' + N.toFixed(1);
+            
+            // 计算弥散圆
+            const numerator = Math.abs(D - S) / D;
+            const denominator = N * (S - f);
+            const CoC = numerator * (f * f) / denominator;
+            
+            // 转换为毫米
+            const CoCmm = CoC * 1000;
+            
+            document.getElementById('cocResult').textContent = CoCmm.toFixed(3) + ' mm';
+            
+            drawVisualization(S, D, f * 1000, N, CoCmm);
+        }
+        
+        function drawVisualization(S, D, f, N, CoC) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const scale = 40;
+            const lensX = 250;
+            const lensY = 200;
+            
+            // 绘制镜头
+            ctx.fillStyle = '#667eea';
+            ctx.beginPath();
+            ctx.ellipse(lensX, lensY, 15, 60, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 绘制光轴
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, lensY);
+            ctx.lineTo(canvas.width, lensY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // 绘制物体（对焦点）
+            const focusX = lensX - S * scale;
+            ctx.fillStyle = '#4caf50';
+            ctx.beginPath();
+            ctx.moveTo(focusX, lensY - 40);
+            ctx.lineTo(focusX, lensY + 40);
+            ctx.lineTo(focusX - 10, lensY + 40);
+            ctx.lineTo(focusX - 10, lensY - 40);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 绘制物体标签
+            ctx.fillStyle = '#4caf50';
+            ctx.font = 'bold 12px Arial';
+            ctx.fillText('对焦点', focusX - 25, lensY - 50);
+            
+            // 绘制实际物体
+            const objectX = lensX - D * scale;
+            ctx.fillStyle = '#f44336';
+            ctx.beginPath();
+            ctx.moveTo(objectX, lensY - 40);
+            ctx.lineTo(objectX, lensY + 40);
+            ctx.lineTo(objectX - 10, lensY + 40);
+            ctx.lineTo(objectX - 10, lensY - 40);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.fillStyle = '#f44336';
+            ctx.fillText('物体', objectX - 20, lensY - 50);
+            
+            // 绘制传感器/成像面
+            const sensorX = lensX + 80;
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(sensorX, lensY - 60);
+            ctx.lineTo(sensorX, lensY + 60);
+            ctx.stroke();
+            
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 12px Arial';
+            ctx.fillText('传感器', sensorX - 10, lensY + 75);
+            
+            // 绘制光线（从物体到镜头到传感器）
+            const apertureRadius = 60 / N;
+            
+            // 上光线
+            ctx.strokeStyle = 'rgba(244, 67, 54, 0.6)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(objectX, lensY - 40);
+            ctx.lineTo(lensX, lensY - apertureRadius);
+            ctx.lineTo(sensorX, lensY + CoC * 10);
+            ctx.stroke();
+            
+            // 下光线
+            ctx.beginPath();
+            ctx.moveTo(objectX, lensY - 40);
+            ctx.lineTo(lensX, lensY + apertureRadius);
+            ctx.lineTo(sensorX, lensY - CoC * 10);
+            ctx.stroke();
+            
+            // 绘制弥散圆
+            const cocRadius = Math.min(CoC * 10, 50);
+            ctx.fillStyle = 'rgba(244, 67, 54, 0.3)';
+            ctx.beginPath();
+            ctx.ellipse(sensorX, lensY, 3, cocRadius, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#f44336';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // 添加光圈标记
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(lensX - 5, lensY - apertureRadius);
+            ctx.lineTo(lensX + 5, lensY - apertureRadius);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(lensX - 5, lensY + apertureRadius);
+            ctx.lineTo(lensX + 5, lensY + apertureRadius);
+            ctx.stroke();
+        }
+        
+        // 事件监听
+        focusSlider.addEventListener('input', calculate);
+        objectSlider.addEventListener('input', calculate);
+        focalSlider.addEventListener('input', calculate);
+        apertureSlider.addEventListener('input', calculate);
+        
+        // 初始化
+        calculate();
+    </script>
+</body>
+</html>
